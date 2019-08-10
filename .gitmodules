@@ -1,0 +1,3 @@
+[submodule "ArcCross"]
+	path = ArcCross
+	url = https://github.com/Ploaj/ArcCross.git
