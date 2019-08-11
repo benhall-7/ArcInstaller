@@ -72,11 +72,12 @@ namespace ArcInstaller
             var lines = File.ReadAllLines(pathFile);
             Console.WriteLine("Opening Arc...");
             Arc arc = new Arc(arcPath);
-            Console.WriteLine("Opened Arc succesfully. Extracting...");
-            Console.WriteLine();
+            Console.WriteLine("Extracting...");
             foreach (var line in lines)
             {
+                Console.ForegroundColor = ConsoleColor.Green;
                 Console.Write($"Entry '{line}' -> ");
+                Console.ForegroundColor = ConsoleColor.White;
                 try
                 {
                     var file = arc.GetFile(line);
@@ -95,8 +96,128 @@ namespace ArcInstaller
 
         static void Inject(string[] args)
         {
-            string arcPath = null;
-            Console.WriteLine("Stubbed operation");
+            if (args.Length < 4)
+            {
+                Console.WriteLine("Insufficient args. See -h for help");
+                return;
+            }
+            string arcPath = args[1];
+            string modsPath = args[2];
+            string injectPath = args[3];
+
+            Console.WriteLine("Opening mods directory...");
+            DirectoryInfo info = new DirectoryInfo(modsPath);
+            if (!File.Exists(injectPath))
+            {
+                Console.WriteLine($"Copying Arc to {injectPath}...");
+                File.Copy(arcPath, injectPath);
+            }
+            Console.WriteLine("Opening Arc...");
+            Arc arc = new Arc(arcPath);
+            Console.WriteLine("Injecting mods...");
+            
+            using (BinaryWriter writer = new BinaryWriter(File.OpenWrite(injectPath)))
+                RecursiveInject(arc, info, writer, "");
+        }
+
+        static void RecursiveInject(Arc arc, DirectoryInfo directory, BinaryWriter writer, string relativePath)
+        {
+            foreach (var folder in directory.EnumerateDirectories())
+                RecursiveInject(arc, folder, writer, Path.Combine(relativePath, folder.Name));
+            foreach (var file in directory.EnumerateFiles())
+            {
+                string path = Path.Combine(relativePath, file.Name);
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.Write($"Entry '{path}' -> ");
+                Console.ForegroundColor = ConsoleColor.White;
+                try
+                {
+                    arc.GetFileInformation(path, out long offset, out uint compSize, out uint decompSize, out bool regional);
+                    writer.BaseStream.Position = offset;
+                    if (file.Length > decompSize)
+                        throw new Exception($"Decompiled size exceeds its limit ({decompSize})");
+
+                    byte[] inputFile = File.ReadAllBytes(file.FullName);
+                    byte[] compFile = new byte[0];
+                    bool canPad = false;
+                    long padSize = 0;
+                    for (int i = 1; i < 23; i++)
+                    {
+                        using (var memStream = new MemoryStream())
+                        using (var zstdStream = new ZstandardStream(memStream, i))
+                        {
+                            zstdStream.Write(inputFile, 0, inputFile.Length);
+                            zstdStream.Close();
+                            compFile = memStream.ToArray();
+                        }
+
+                        padSize = compSize - compFile.Length;
+                        if (padSize < 0 || padSize == 1 || padSize == 2 || padSize == 5)
+                            continue;
+                        canPad = true;
+                        break;
+                    }
+                    if (!canPad)
+                        throw new Exception("File unable to be compressed to the correct size");
+
+                    //padding mechanism by Birdwards: https://github.com/Birdwards/SmashPad/blob/master/smashpad.py
+                    byte Frame_Header_Descriptor = compFile[4];
+
+                    int start_index = 6;
+                    if (Frame_Header_Descriptor >= 0xc0)
+                        start_index = 13;
+                    else if (Frame_Header_Descriptor >= 0x80)
+                        start_index = 9;
+                    else if (Frame_Header_Descriptor >= 0x40)
+                        start_index = 7;
+
+                    if (start_index > 6 && (Frame_Header_Descriptor & 0x3f) < 0x20)
+                        start_index += 1;
+
+                    if ((Frame_Header_Descriptor & 0x3) == 1)
+                        start_index += 1;
+                    else if ((Frame_Header_Descriptor & 0x3) == 2)
+                        start_index += 2;
+                    else if ((Frame_Header_Descriptor & 0x3) == 3)
+                        start_index += 4;
+
+                    using (var compWithPadStream = new MemoryStream())
+                    {
+                        compWithPadStream.Write(compFile, 0, start_index);
+
+                        byte[] padData = new byte[] { 2, 0, 0, 0 };
+                        if (padSize % 3 == 0)
+                        {
+                            for (int i = 0; i < padSize; i++)
+                                compWithPadStream.WriteByte(0);
+                        }
+                        else if (padSize % 3 == 1)
+                        {
+                            for (int i = 0; i < padSize - 4; i++)
+                                compWithPadStream.WriteByte(0);
+                            compWithPadStream.Write(padData);
+                        }
+                        else if (padSize % 3 == 2)
+                        {
+                            for (int i = 0; i < padSize - 8; i++)
+                                compWithPadStream.WriteByte(0);
+                            compWithPadStream.Write(padData);
+                            compWithPadStream.Write(padData);
+                        }
+
+                        compWithPadStream.Write(compFile, start_index, compFile.Length - start_index);
+
+                        writer.Write(compWithPadStream.ToArray());
+                    }
+
+                    Console.WriteLine("Injected");
+                }
+                catch (Exception e)
+                {
+                    Console.Write($"Failed: {e.Message}");
+                }
+                Console.WriteLine();
+            }
         }
     }
 
