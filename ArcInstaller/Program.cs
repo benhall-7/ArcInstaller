@@ -207,6 +207,9 @@ namespace ArcInstaller
 
                         compWithPadStream.Write(compFile, start_index, compFile.Length - start_index);
 
+                        if (compWithPadStream.Length != compSize)
+                            throw new Exception("Error occurred in compression step, compression size mismatch");
+
                         writer.Write(compWithPadStream.ToArray());
                     }
 
