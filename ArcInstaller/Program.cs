@@ -22,7 +22,7 @@ namespace ArcInstaller
             "        <path to mod directory>\n" +
             "        <path to output Arc>\n" +
             "        ->  (if it does not exist, copies input arc)\n" +
-            "        Optional: '-u'" +
+            "        Optional: '-u'\n" +
             "        -'undo', takes all names in the directory and\n" +
             "        -applies the original version into the new arc";
 
