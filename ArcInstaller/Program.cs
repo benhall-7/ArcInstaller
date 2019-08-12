@@ -75,9 +75,11 @@ namespace ArcInstaller
             Console.WriteLine("Extracting...");
             foreach (var line in lines)
             {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Write($"Entry '{line}' -> ");
+                Console.Write("Entry '");
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Write(line);
                 Console.ForegroundColor = ConsoleColor.White;
+                Console.Write("' -> ");
                 try
                 {
                     var file = arc.GetFile(line);
@@ -109,7 +111,7 @@ namespace ArcInstaller
             DirectoryInfo info = new DirectoryInfo(modsPath);
             if (!File.Exists(injectPath))
             {
-                Console.WriteLine($"Copying Arc to {injectPath}...");
+                Console.WriteLine($"Copying Arc to {injectPath}. This may take some minutes...");
                 File.Copy(arcPath, injectPath);
             }
             Console.WriteLine("Opening Arc...");
@@ -127,12 +129,18 @@ namespace ArcInstaller
             foreach (var file in directory.EnumerateFiles())
             {
                 string path = Path.Combine(relativePath, file.Name).Replace('\\','/');
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Write($"Entry '{path}' -> ");
+                Console.Write("Entry '");
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Write(path);
                 Console.ForegroundColor = ConsoleColor.White;
+                Console.Write("' -> ");
                 try
                 {
                     arc.GetFileInformation(path, out long offset, out uint compSize, out uint decompSize, out bool regional);
+
+                    if (offset == 0)
+                        throw new Exception("File path does not return valid data. See if the path is correct");
+
                     writer.BaseStream.Position = offset;
                     if (file.Length > decompSize)
                         throw new Exception($"Decompiled size exceeds its limit ({decompSize})");
@@ -213,11 +221,15 @@ namespace ArcInstaller
                         writer.Write(compWithPadStream.ToArray());
                     }
 
+                    Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine("Injected");
+                    Console.ForegroundColor = ConsoleColor.White;
                 }
                 catch (Exception e)
                 {
+                    Console.ForegroundColor = ConsoleColor.Red;
                     Console.Write($"Failed: {e.Message}");
+                    Console.ForegroundColor = ConsoleColor.White;
                 }
                 Console.WriteLine();
             }
