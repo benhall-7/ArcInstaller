@@ -126,7 +126,7 @@ namespace ArcInstaller
                 RecursiveInject(arc, folder, writer, Path.Combine(relativePath, folder.Name));
             foreach (var file in directory.EnumerateFiles())
             {
-                string path = Path.Combine(relativePath, file.Name);
+                string path = Path.Combine(relativePath, file.Name).Replace('\\','/');
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.Write($"Entry '{path}' -> ");
                 Console.ForegroundColor = ConsoleColor.White;
