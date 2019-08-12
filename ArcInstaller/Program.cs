@@ -1,6 +1,7 @@
-﻿using System;
+﻿using ArcCross;
+using System;
+using System.Collections.Generic;
 using System.IO;
-using ArcCross;
 using Zstandard.Net;
 
 namespace ArcInstaller
@@ -21,6 +22,8 @@ namespace ArcInstaller
             "          <path to mod directory>\n" +
             "          <path to output Arc>\n" +
             "          ->  (if it does not exist, copies input arc)";
+
+        static HashSet<long> InjectedOffsets { get; set; }
 
         static void Main(string[] args)
         {
@@ -98,6 +101,7 @@ namespace ArcInstaller
 
         static void Inject(string[] args)
         {
+            InjectedOffsets = new HashSet<long>();
             if (args.Length < 4)
             {
                 Console.WriteLine("Insufficient args. See -h for help");
@@ -140,6 +144,9 @@ namespace ArcInstaller
 
                     if (offset == 0)
                         throw new Exception("File path does not return valid data. See if the path is correct");
+
+                    if (InjectedOffsets.Contains(offset))
+                        throw new Exception("File points to address where data is already injected");
 
                     writer.BaseStream.Position = offset;
                     if (file.Length > decompSize)
@@ -220,6 +227,8 @@ namespace ArcInstaller
 
                         writer.Write(compWithPadStream.ToArray());
                     }
+
+                    InjectedOffsets.Add(offset);
 
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.WriteLine("Injected");
