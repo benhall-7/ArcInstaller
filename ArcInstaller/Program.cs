@@ -15,15 +15,19 @@ namespace ArcInstaller
             "[Modes] = '-h' (print help)\n" +
             "        = '-i' (Inject)\n" +
             "        = '-e' (Extract)\n" +
-            "Extract : <path to Arc>\n" +
-            "          <path to name table>\n" +
-            "          Optional: <extract folder>\n" +
-            "Inject  : <path to Arc>\n" +
-            "          <path to mod directory>\n" +
-            "          <path to output Arc>\n" +
-            "          ->  (if it does not exist, copies input arc)";
+            "Extract <path to Arc>\n" +
+            "        <path to name table>\n" +
+            "        Optional: <extract folder>\n" +
+            "Inject  <path to Arc>\n" +
+            "        <path to mod directory>\n" +
+            "        <path to output Arc>\n" +
+            "        ->  (if it does not exist, copies input arc)\n" +
+            "        Optional: '-u'" +
+            "        -'undo', takes all names in the directory and\n" +
+            "        -applies the original version into the new arc";
 
         static HashSet<long> InjectedOffsets { get; set; }
+        static bool InjectUndo { get; set; } = false;
 
         static void Main(string[] args)
         {
@@ -78,11 +82,10 @@ namespace ArcInstaller
             Console.WriteLine("Extracting...");
             foreach (var line in lines)
             {
-                Console.Write("Entry '");
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.Write(line);
                 Console.ForegroundColor = ConsoleColor.White;
-                Console.Write("' -> ");
+                Console.Write(" -> ");
                 try
                 {
                     var file = arc.GetFile(line);
@@ -111,8 +114,19 @@ namespace ArcInstaller
             string modsPath = args[2];
             string injectPath = args[3];
 
+            if (args.Length > 4)
+            {
+                if (args[4] == "-u")
+                    InjectUndo = true;
+            }
+
             Console.WriteLine("Opening mods directory...");
             DirectoryInfo info = new DirectoryInfo(modsPath);
+            if (Path.GetFullPath(arcPath) == Path.GetFullPath(injectPath))
+            {
+                Console.WriteLine("Path to arc and path to output arc cannot be the same.");
+                return;
+            }
             if (!File.Exists(injectPath))
             {
                 Console.WriteLine($"Copying Arc to {injectPath}. This may take some minutes...");
@@ -133,11 +147,10 @@ namespace ArcInstaller
             foreach (var file in directory.EnumerateFiles())
             {
                 string path = Path.Combine(relativePath, file.Name).Replace('\\','/');
-                Console.Write("Entry '");
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.Write(path);
                 Console.ForegroundColor = ConsoleColor.White;
-                Console.Write("' -> ");
+                Console.Write(" -> ");
                 try
                 {
                     arc.GetFileInformation(path, out long offset, out uint compSize, out uint decompSize, out bool regional);
@@ -149,98 +162,117 @@ namespace ArcInstaller
                         throw new Exception("File points to address where data is already injected");
 
                     writer.BaseStream.Position = offset;
-                    if (file.Length > decompSize)
-                        throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
-
-                    byte[] inputFile = File.ReadAllBytes(file.FullName);
-                    byte[] compFile = new byte[0];
-                    bool canPad = false;
-                    long padSize = 0;
-                    for (int i = 1; i < 23; i++)
+                    if (!InjectUndo)
                     {
-                        using (var memStream = new MemoryStream())
-                        using (var zstdStream = new ZstandardStream(memStream, i))
-                        {
-                            zstdStream.Write(inputFile, 0, inputFile.Length);
-                            zstdStream.Close();
-                            compFile = memStream.ToArray();
-                        }
+                        if (file.Length > decompSize)
+                            throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
 
-                        padSize = compSize - compFile.Length;
-                        if (padSize < 0 || padSize == 1 || padSize == 2 || padSize == 5)
-                            continue;
-                        canPad = true;
-                        break;
+                        writer.Write(Compress(file, compSize));
+
+                        InjectedOffsets.Add(offset);
+
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine("Injected");
+                        Console.ForegroundColor = ConsoleColor.White;
                     }
-                    if (!canPad)
-                        throw new Exception("File unable to be compressed to the correct size");
-
-                    //padding mechanism by Birdwards: https://github.com/Birdwards/SmashPad/blob/master/smashpad.py
-                    byte Frame_Header_Descriptor = compFile[4];
-
-                    int start_index = 6;
-                    if (Frame_Header_Descriptor >= 0xc0)
-                        start_index = 13;
-                    else if (Frame_Header_Descriptor >= 0x80)
-                        start_index = 9;
-                    else if (Frame_Header_Descriptor >= 0x40)
-                        start_index = 7;
-
-                    if (start_index > 6 && (Frame_Header_Descriptor & 0x3f) < 0x20)
-                        start_index += 1;
-
-                    if ((Frame_Header_Descriptor & 0x3) == 1)
-                        start_index += 1;
-                    else if ((Frame_Header_Descriptor & 0x3) == 2)
-                        start_index += 2;
-                    else if ((Frame_Header_Descriptor & 0x3) == 3)
-                        start_index += 4;
-
-                    using (var compWithPadStream = new MemoryStream())
+                    else
                     {
-                        compWithPadStream.Write(compFile, 0, start_index);
+                        writer.Write(arc.GetFileCompressed(path));
 
-                        byte[] padData = new byte[] { 2, 0, 0, 0 };
-                        if (padSize % 3 == 0)
-                        {
-                            for (int i = 0; i < padSize; i++)
-                                compWithPadStream.WriteByte(0);
-                        }
-                        else if (padSize % 3 == 1)
-                        {
-                            for (int i = 0; i < padSize - 4; i++)
-                                compWithPadStream.WriteByte(0);
-                            compWithPadStream.Write(padData);
-                        }
-                        else if (padSize % 3 == 2)
-                        {
-                            for (int i = 0; i < padSize - 8; i++)
-                                compWithPadStream.WriteByte(0);
-                            compWithPadStream.Write(padData);
-                            compWithPadStream.Write(padData);
-                        }
+                        InjectedOffsets.Add(offset);
 
-                        compWithPadStream.Write(compFile, start_index, compFile.Length - start_index);
-
-                        if (compWithPadStream.Length != compSize)
-                            throw new Exception("Error occurred in compression step, compression size mismatch");
-
-                        writer.Write(compWithPadStream.ToArray());
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine("Restored");
+                        Console.ForegroundColor = ConsoleColor.White;
                     }
-
-                    InjectedOffsets.Add(offset);
-
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("Injected");
-                    Console.ForegroundColor = ConsoleColor.White;
                 }
                 catch (Exception e)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.Write($"Failed: {e.Message}");
+                    Console.Write("Failed: ");
                     Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine(e.Message);
                 }
                 Console.WriteLine();
+            }
+        }
+
+        static byte[] Compress(FileInfo file, uint compSize)
+        {
+            byte[] inputFile = File.ReadAllBytes(file.FullName);
+            byte[] compFile = new byte[0];
+            bool canPad = false;
+            long padSize = 0;
+            for (int i = 1; i < 23; i++)
+            {
+                using (var memStream = new MemoryStream())
+                using (var zstdStream = new ZstandardStream(memStream, i))
+                {
+                    zstdStream.Write(inputFile, 0, inputFile.Length);
+                    zstdStream.Close();
+                    compFile = memStream.ToArray();
+                }
+
+                padSize = compSize - compFile.Length;
+                if (padSize < 0 || padSize == 1 || padSize == 2 || padSize == 5)
+                    continue;
+                canPad = true;
+                break;
+            }
+            if (!canPad)
+                throw new Exception("File unable to be compressed to the correct size");
+
+            //padding mechanism by Birdwards: https://github.com/Birdwards/SmashPad/blob/master/smashpad.py
+            byte Frame_Header_Descriptor = compFile[4];
+
+            int start_index = 6;
+            if (Frame_Header_Descriptor >= 0xc0)
+                start_index = 13;
+            else if (Frame_Header_Descriptor >= 0x80)
+                start_index = 9;
+            else if (Frame_Header_Descriptor >= 0x40)
+                start_index = 7;
+
+            if (start_index > 6 && (Frame_Header_Descriptor & 0x3f) < 0x20)
+                start_index += 1;
+
+            if ((Frame_Header_Descriptor & 0x3) == 1)
+                start_index += 1;
+            else if ((Frame_Header_Descriptor & 0x3) == 2)
+                start_index += 2;
+            else if ((Frame_Header_Descriptor & 0x3) == 3)
+                start_index += 4;
+
+            using (var compWithPadStream = new MemoryStream())
+            {
+                compWithPadStream.Write(compFile, 0, start_index);
+
+                byte[] padData = new byte[] { 2, 0, 0, 0 };
+                if (padSize % 3 == 0)
+                {
+                    for (int i = 0; i < padSize; i++)
+                        compWithPadStream.WriteByte(0);
+                }
+                else if (padSize % 3 == 1)
+                {
+                    for (int i = 0; i < padSize - 4; i++)
+                        compWithPadStream.WriteByte(0);
+                    compWithPadStream.Write(padData);
+                }
+                else if (padSize % 3 == 2)
+                {
+                    for (int i = 0; i < padSize - 8; i++)
+                        compWithPadStream.WriteByte(0);
+                    compWithPadStream.Write(padData);
+                    compWithPadStream.Write(padData);
+                }
+
+                compWithPadStream.Write(compFile, start_index, compFile.Length - start_index);
+
+                if (compWithPadStream.Length != compSize)
+                    throw new Exception("Error occurred in compression step, compression size mismatch");
+
+                return compWithPadStream.ToArray();
             }
         }
     }
