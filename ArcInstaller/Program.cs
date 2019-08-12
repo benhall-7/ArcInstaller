@@ -143,7 +143,7 @@ namespace ArcInstaller
 
                     writer.BaseStream.Position = offset;
                     if (file.Length > decompSize)
-                        throw new Exception($"Decompiled size exceeds its limit ({decompSize})");
+                        throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
 
                     byte[] inputFile = File.ReadAllBytes(file.FullName);
                     byte[] compFile = new byte[0];
