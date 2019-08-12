@@ -1,6 +1,7 @@
 ﻿using ArcCross;
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.IO;
 using Zstandard.Net;
 
@@ -8,26 +9,42 @@ namespace ArcInstaller
 {
     class Program
     {
-        static Mode Mode { get; set; }
         static string HelpText { get; set; } =
-            "- ArcInstaller -\n" +
+            "~ ArcInstaller ~\n" +
             "Usage: <mode> <options>\n" +
             "[Modes] = '-h' (print help)\n" +
             "        = '-i' (Inject)\n" +
             "        = '-e' (Extract)\n" +
+            "        = '-f' (FTP)\n" +
+            "\n" +
             "Extract <path to Arc>\n" +
             "        <path to name table>\n" +
             "        Optional: <extract folder>\n" +
-            "Inject  <path to Arc>\n" +
-            "        <path to mod directory>\n" +
-            "        <path to output Arc>\n" +
-            "        ->  (if it does not exist, copies input arc)\n" +
-            "        Optional: '-u'\n" +
-            "        -'undo', takes all names in the directory and\n" +
-            "        -applies the original version into the new arc";
+            "\n" +
+            "Inject <path to Arc>\n" +
+            "       <path to mods folder>\n" +
+            "       <path to output Arc>\n" +
+            "         (if it does not exist, copies input arc)\n" +
+            "       Optional: '-u'\n" +
+            "         \"Undo\". takes all names in the directory and\n" +
+            "         applies the original version into the new arc\n" +
+            "       Or: '-d'\n" +
+            "         \"Dump\". instead of injecting, copies compressed\n" +
+            "         mods to an output folder specifed by the\n" +
+            "         output path variable\n" +
+            "\n" +
+            "FTP <path to Arc>\n" +
+            "    <path to mods folder>\n" +
+            "    <IPv4 addr to switch server>\n" +
+            "    <port number in switch server>\n" +
+            "    Optional: <folder path>\n" +
+            "      specifies a folder path in the switch to transfer to\n" +
+            "      default: \"sdmc:/SaltySD/mods/\"";
 
         static HashSet<long> InjectedOffsets { get; set; }
         static bool InjectUndo { get; set; } = false;
+        static bool InjectDump { get; set; } = false;
+        static string InjectDumpPath { get; set; }
 
         static void Main(string[] args)
         {
@@ -39,10 +56,13 @@ namespace ArcInstaller
             switch (args[0])
             {
                 case "-i":
-                    Mode = Mode.Inject;
+                    Inject(args);
                     break;
                 case "-e":
-                    Mode = Mode.Extract;
+                    Extract(args);
+                    break;
+                case "-f":
+                    FTP(args);
                     break;
                 case "-h":
                     Console.WriteLine(HelpText);
@@ -50,15 +70,6 @@ namespace ArcInstaller
                 default:
                     Console.WriteLine($"Invalid option '{args[0]}'. See option '-h' for help");
                     return;
-            }
-            switch (Mode)
-            {
-                case Mode.Inject:
-                    Inject(args);
-                    break;
-                case Mode.Extract:
-                    Extract(args);
-                    break;
             }
         }
 
@@ -118,26 +129,67 @@ namespace ArcInstaller
             {
                 if (args[4] == "-u")
                     InjectUndo = true;
+                else if (args[4] == "-d")
+                {
+                    InjectDump = true;
+                    InjectDumpPath = injectPath;
+                }
+                else
+                {
+                    Console.WriteLine($"Invalid option: {args[4]}");
+                    return;
+                }
             }
 
             Console.WriteLine("Opening mods directory...");
             DirectoryInfo info = new DirectoryInfo(modsPath);
-            if (Path.GetFullPath(arcPath) == Path.GetFullPath(injectPath))
+
+            if (InjectDump)
             {
-                Console.WriteLine("Path to arc and path to output arc cannot be the same.");
-                return;
+                if (!Directory.Exists(injectPath))
+                {
+                    Console.WriteLine($"Could not find path to dump compressed files at '{injectPath}'");
+                    return;
+                }
             }
-            if (!File.Exists(injectPath))
+            else
             {
-                Console.WriteLine($"Copying Arc to {injectPath}. This may take some minutes...");
-                File.Copy(arcPath, injectPath);
+                if (Path.GetFullPath(arcPath) == Path.GetFullPath(injectPath))
+                {
+                    Console.WriteLine("Path to arc and path to output arc cannot be the same.");
+                    return;
+                }
+                if (InjectUndo)
+                {
+                    if (!File.Exists(injectPath))
+                    {
+                        Console.WriteLine($"Path does not exist: {injectPath}");
+                        Console.WriteLine("There is no data to restore.");
+                        return;
+                    }
+                }
+                else
+                {
+                    if (!File.Exists(injectPath))
+                    {
+                        Console.WriteLine($"Copying Arc to {injectPath}. This may take some minutes...");
+                        File.Copy(arcPath, injectPath);
+                    }
+                }
             }
             Console.WriteLine("Opening Arc...");
             Arc arc = new Arc(arcPath);
             Console.WriteLine("Injecting mods...");
             
-            using (BinaryWriter writer = new BinaryWriter(File.OpenWrite(injectPath)))
-                RecursiveInject(arc, info, writer, "");
+            if (!InjectDump)
+            {
+                using (BinaryWriter writer = new BinaryWriter(File.OpenWrite(injectPath)))
+                    RecursiveInject(arc, info, writer, "");
+            }
+            else
+            {
+                RecursiveInject(arc, info, null, "");
+            }
         }
 
         static void RecursiveInject(Arc arc, DirectoryInfo directory, BinaryWriter writer, string relativePath)
@@ -159,30 +211,39 @@ namespace ArcInstaller
                         throw new Exception("File path does not return valid data. See if the path is correct");
 
                     if (InjectedOffsets.Contains(offset))
-                        throw new Exception("File points to address where data is already injected");
+                        throw new Exception("File path points to address where data is already handled");
 
-                    writer.BaseStream.Position = offset;
-                    if (!InjectUndo)
+                    if (InjectUndo)
                     {
-                        if (file.Length > decompSize)
-                            throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
-
-                        writer.Write(Compress(file, compSize));
-
-                        InjectedOffsets.Add(offset);
-
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("Injected");
-                        Console.ForegroundColor = ConsoleColor.White;
-                    }
-                    else
-                    {
+                        writer.BaseStream.Position = offset;
                         writer.Write(arc.GetFileCompressed(path));
 
                         InjectedOffsets.Add(offset);
 
                         Console.ForegroundColor = ConsoleColor.Yellow;
                         Console.WriteLine("Restored");
+                        Console.ForegroundColor = ConsoleColor.White;
+                    }
+                    else if (InjectDump)
+                    {
+                        InjectedOffsets.Add(offset);
+                        var compFile = Compress(file, compSize);
+                        var dumpFolderPath = Path.Combine(InjectDumpPath, relativePath);
+                        Directory.CreateDirectory(dumpFolderPath);
+                        File.WriteAllBytes(Path.Combine(dumpFolderPath, $"{offset.ToString("x")}_{file.Name}"), compFile);
+                    }
+                    else
+                    {
+                        if (file.Length > decompSize)
+                            throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
+
+                        writer.BaseStream.Position = offset;
+                        writer.Write(Compress(file, compSize));
+
+                        InjectedOffsets.Add(offset);
+
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine("Injected");
                         Console.ForegroundColor = ConsoleColor.White;
                     }
                 }
@@ -275,11 +336,10 @@ namespace ArcInstaller
                 return compWithPadStream.ToArray();
             }
         }
-    }
 
-    enum Mode
-    {
-        Extract,
-        Inject
+        static void FTP(string[] args)
+        {
+
+        }
     }
 }
