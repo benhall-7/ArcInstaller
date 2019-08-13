@@ -337,6 +337,7 @@ namespace ArcInstaller
                     req.KeepAlive = true;
                     req.UseBinary = true;
                     req.Timeout = 10000;
+                    req.UsePassive = false;
                     req.ContentLength = compFile.Length;
 
                     using (var str = req.GetRequestStream())
