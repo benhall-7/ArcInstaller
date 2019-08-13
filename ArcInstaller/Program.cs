@@ -9,6 +9,24 @@ namespace ArcInstaller
 {
     class Program
     {
+        public static readonly string[] RegionTags =
+        {
+            "+jp_ja",
+            "+us_en",
+            "+us_fr",
+            "+us_es",
+            "+eu_en",
+            "+eu_fr",
+            "+eu_es",
+            "+eu_de",
+            "+eu_nl",
+            "+eu_it",
+            "+eu_ru",
+            "+kr_ko",
+            "+zh_cn",
+            "+zh_tw"
+        };
+
         static string HelpText { get; set; } =
             "~ ArcInstaller ~\n" +
             "Usage: <mode> <options>\n" +
@@ -199,25 +217,29 @@ namespace ArcInstaller
                 RecursiveInject(arc, folder, writer, Path.Combine(relativePath, folder.Name));
             foreach (var file in directory.EnumerateFiles())
             {
-                string path = Path.Combine(relativePath, file.Name).Replace('\\', '/');
+                GetFileRegionInfo(file.Name, out string arcFileName, out int region);
+                string arcPath = Path.Combine(relativePath, arcFileName).Replace('\\', '/');
+                
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.Write(path);
+                Console.Write(arcPath);
+                if (region > 0)
+                    Console.Write($" region={region}");
                 Console.ForegroundColor = ConsoleColor.White;
                 Console.Write(" -> ");
                 try
                 {
-                    arc.GetFileInformation(path, out long offset, out uint compSize, out uint decompSize, out bool regional);
+                    arc.GetFileInformation(arcPath, out long offset, out uint compSize, out uint decompSize, out bool regional, region);
 
                     if (offset == 0)
                         throw new Exception("File path does not return valid data. See if the path is correct");
 
                     if (InjectedOffsets.Contains(offset))
-                        throw new Exception($"Another file already has this offset {offset.ToString("x")}");
+                        throw new Exception($"Another file already has this offset ({offset.ToString("x")})");
 
                     if (InjectUndo)
                     {
                         writer.BaseStream.Position = offset;
-                        writer.Write(arc.GetFileCompressed(path));
+                        writer.Write(arc.GetFileCompressed(arcPath));
 
                         InjectedOffsets.Add(offset);
 
@@ -310,14 +332,18 @@ namespace ArcInstaller
             }
             foreach (var file in directory.EnumerateFiles())
             {
-                string path = Path.Combine(relativePath, file.Name).Replace('\\', '/');
+                GetFileRegionInfo(file.Name, out string arcFileName, out int region);
+                string arcPath = Path.Combine(relativePath, arcFileName).Replace('\\', '/');
+
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.Write(path);
+                Console.Write(arcPath);
+                if (region > 0)
+                    Console.Write($" region={region}");
                 Console.ForegroundColor = ConsoleColor.White;
                 Console.Write(" -> ");
                 try
                 {
-                    arc.GetFileInformation(path, out long offset, out uint compSize, out uint decompSize, out bool regional);
+                    arc.GetFileInformation(arcPath, out long offset, out uint compSize, out uint decompSize, out bool regional);
 
                     if (offset == 0)
                         throw new Exception("File path does not return valid data. See if the path is correct");
@@ -329,7 +355,7 @@ namespace ArcInstaller
                         throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
 
                     if (InjectedOffsets.Contains(offset))
-                        throw new Exception($"Another file already has this offset {offset.ToString("x")}");
+                        throw new Exception($"Another file already has this offset ({offset.ToString("x")})");
 
                     byte[] compFile = Compress(file, compSize);
 
@@ -444,6 +470,28 @@ namespace ArcInstaller
 
                 return compWithPadStream.ToArray();
             }
+        }
+
+        static void GetFileRegionInfo(string original, out string nameNoRegion, out int region)
+        {
+            region = 0;
+            string noExt = Path.GetFileNameWithoutExtension(original);
+            string ext = Path.GetExtension(original);
+            nameNoRegion = noExt;
+            int plusIndex = noExt.LastIndexOf('+');
+            if (plusIndex >= 0)//-1 = there is no + char
+            {
+                for (int i = 0; i < RegionTags.Length; i++)
+                {
+                    if (noExt.EndsWith(RegionTags[i]))
+                    {
+                        region = i;
+                        nameNoRegion = noExt.Remove(plusIndex);
+                        break;
+                    }
+                }
+            }
+            nameNoRegion += ext;
         }
     }
 }
