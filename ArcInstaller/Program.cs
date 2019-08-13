@@ -222,7 +222,7 @@ namespace ArcInstaller
                         InjectedOffsets.Add(offset);
 
                         Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine("Restored");
+                        Console.Write("Restored");
                         Console.ForegroundColor = ConsoleColor.White;
                     }
                     else if (InjectDump)
@@ -248,7 +248,7 @@ namespace ArcInstaller
                         InjectedOffsets.Add(offset);
 
                         Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine("Injected");
+                        Console.Write("Injected");
                         Console.ForegroundColor = ConsoleColor.White;
                     }
                 }
@@ -257,7 +257,7 @@ namespace ArcInstaller
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.Write("Failed: ");
                     Console.ForegroundColor = ConsoleColor.White;
-                    Console.WriteLine(e.Message);
+                    Console.Write(e.Message);
                 }
                 Console.WriteLine();
             }
@@ -348,9 +348,10 @@ namespace ArcInstaller
                         str.Write(compFile, 0, compFile.Length);
                     using (var res = (FtpWebResponse)req.GetResponse())
                     {
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine($"Transfer status {res.StatusDescription}");
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.Write("Transferred!");
                         Console.ForegroundColor = ConsoleColor.White;
+                        Console.Write($" (FTP status: {res.StatusDescription})");
                     }
 
                     InjectedOffsets.Add(offset);
@@ -360,7 +361,7 @@ namespace ArcInstaller
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.Write("Failed: ");
                     Console.ForegroundColor = ConsoleColor.White;
-                    Console.WriteLine(e.Message);
+                    Console.Write(e.Message);
                 }
                 Console.WriteLine();
             }
