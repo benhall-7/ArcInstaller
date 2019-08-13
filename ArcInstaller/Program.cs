@@ -332,7 +332,7 @@ namespace ArcInstaller
                     var filepath = Path.Combine(relativePath, $"{offset.ToString("x")}_{file.Name}");
                     var ftpPath = ftpRoot + filepath.Replace('\\', '/');
 
-                    var req = (FtpWebRequest)WebRequest.Create(ftpRoot);
+                    var req = (FtpWebRequest)WebRequest.Create(ftpPath);
                     req.Method = "STOR";
                     req.KeepAlive = true;
                     req.UseBinary = true;
