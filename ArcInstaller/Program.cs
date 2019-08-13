@@ -39,7 +39,8 @@ namespace ArcInstaller
             "    <port number in switch server>\n" +
             "    Optional: <folder path>\n" +
             "      specifies a folder path in the switch to transfer to\n" +
-            "      default: \"SaltySD/mods/\"";
+            "      default: \"SaltySD/mods/\"\n" +
+            "      NOTE: doesn't begin with '/', and ends with '/'";
 
         static HashSet<long> InjectedOffsets { get; set; }
         static bool InjectUndo { get; set; } = false;
@@ -211,7 +212,7 @@ namespace ArcInstaller
                         throw new Exception("File path does not return valid data. See if the path is correct");
 
                     if (InjectedOffsets.Contains(offset))
-                        throw new Exception("File path points to address where data is already handled");
+                        throw new Exception($"Another file already has this offset {offset.ToString("x")}");
 
                     if (InjectUndo)
                     {
@@ -288,10 +289,10 @@ namespace ArcInstaller
             Console.WriteLine("Opening Arc...");
             Arc arc = new Arc(arcPath);
 
-            RecursiveFTPFiles(arc, info, ftpRoot, "");
+            RecursiveFTP(arc, info, ftpRoot, "");
         }
 
-        static void RecursiveFTPFiles(Arc arc, DirectoryInfo directory, string ftpRoot, string relativePath)
+        static void RecursiveFTP(Arc arc, DirectoryInfo directory, string ftpRoot, string relativePath)
         {
             foreach (var folder in directory.EnumerateDirectories())
             {
@@ -305,7 +306,7 @@ namespace ArcInstaller
                 using (var res = (FtpWebResponse)req.GetResponse())
                     Console.WriteLine(res.StatusDescription);
 
-                RecursiveFTPFiles(arc, folder, ftpRoot, thisRelPath);
+                RecursiveFTP(arc, folder, ftpRoot, thisRelPath);
             }
             foreach (var file in directory.EnumerateFiles())
             {
@@ -326,6 +327,9 @@ namespace ArcInstaller
 
                     if (file.Length > decompSize)
                         throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
+
+                    if (InjectedOffsets.Contains(offset))
+                        throw new Exception($"Another file already has this offset {offset.ToString("x")}");
 
                     byte[] compFile = Compress(file, compSize);
 
@@ -348,6 +352,8 @@ namespace ArcInstaller
                         Console.WriteLine($"Transfer status {res.StatusDescription}");
                         Console.ForegroundColor = ConsoleColor.White;
                     }
+
+                    InjectedOffsets.Add(offset);
                 }
                 catch (Exception e)
                 {
