@@ -343,7 +343,7 @@ namespace ArcInstaller
                 Console.Write(" -> ");
                 try
                 {
-                    arc.GetFileInformation(arcPath, out long offset, out uint compSize, out uint decompSize, out bool regional);
+                    arc.GetFileInformation(arcPath, out long offset, out uint compSize, out uint decompSize, out bool regional, region);
 
                     if (offset == 0)
                         throw new Exception("File path does not return valid data. See if the path is correct");
