@@ -39,7 +39,7 @@ namespace ArcInstaller
             "    <port number in switch server>\n" +
             "    Optional: <folder path>\n" +
             "      specifies a folder path in the switch to transfer to\n" +
-            "      default: \"sdmc:/SaltySD/mods/\"";
+            "      default: \"SaltySD/mods/\"";
 
         static HashSet<long> InjectedOffsets { get; set; }
         static bool InjectUndo { get; set; } = false;
@@ -274,7 +274,7 @@ namespace ArcInstaller
             string modsPath = args[2];
             string ip = args[3];
             string port = args[4];
-            string folder = "sdmc:/SaltySD/mods";
+            string folder = "SaltySD/mods";
             if (args.Length > 5)
                 folder = args[5];
 
