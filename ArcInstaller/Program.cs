@@ -180,7 +180,7 @@ namespace ArcInstaller
             Console.WriteLine("Opening Arc...");
             Arc arc = new Arc(arcPath);
             Console.WriteLine("Injecting mods...");
-            
+
             if (!InjectDump)
             {
                 using (BinaryWriter writer = new BinaryWriter(File.OpenWrite(injectPath)))
@@ -198,7 +198,7 @@ namespace ArcInstaller
                 RecursiveInject(arc, folder, writer, Path.Combine(relativePath, folder.Name));
             foreach (var file in directory.EnumerateFiles())
             {
-                string path = Path.Combine(relativePath, file.Name).Replace('\\','/');
+                string path = Path.Combine(relativePath, file.Name).Replace('\\', '/');
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.Write(path);
                 Console.ForegroundColor = ConsoleColor.White;
@@ -226,11 +226,15 @@ namespace ArcInstaller
                     }
                     else if (InjectDump)
                     {
+                        if (file.Length > decompSize)
+                            throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
+
                         InjectedOffsets.Add(offset);
                         var compFile = Compress(file, compSize);
                         var dumpFolderPath = Path.Combine(InjectDumpPath, relativePath);
+                        var newName = $"{offset.ToString("x")}_{file.Name}";
                         Directory.CreateDirectory(dumpFolderPath);
-                        File.WriteAllBytes(Path.Combine(dumpFolderPath, $"{offset.ToString("x")}_{file.Name}"), compFile);
+                        File.WriteAllBytes(Path.Combine(dumpFolderPath, newName), compFile);
                     }
                     else
                     {
@@ -244,6 +248,103 @@ namespace ArcInstaller
 
                         Console.ForegroundColor = ConsoleColor.Green;
                         Console.WriteLine("Injected");
+                        Console.ForegroundColor = ConsoleColor.White;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.Write("Failed: ");
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.WriteLine(e.Message);
+                }
+                Console.WriteLine();
+            }
+        }
+
+        static void FTP(string[] args)
+        {
+            InjectedOffsets = new HashSet<long>();
+            if (args.Length < 5)
+            {
+                Console.WriteLine("Insufficient args. See -h for help");
+                return;
+            }
+            string arcPath = args[1];
+            string modsPath = args[2];
+            string ip = args[3];
+            string port = args[4];
+            string folder = "sdmc:/SaltySD/mods";
+            if (args.Length > 5)
+                folder = args[5];
+
+            string ftpRoot = $"ftp://{ip}:{port}/{folder}/";
+
+            Console.WriteLine($"FTP path: {ftpRoot}");
+
+            Console.WriteLine("Opening mods directory...");
+            DirectoryInfo info = new DirectoryInfo(modsPath);
+
+            Console.WriteLine("Opening Arc...");
+            Arc arc = new Arc(arcPath);
+
+            RecursiveFTPFiles(arc, info, ftpRoot, "");
+        }
+
+        static void RecursiveFTPFiles(Arc arc, DirectoryInfo directory, string ftpRoot, string relativePath)
+        {
+            foreach (var folder in directory.EnumerateDirectories())
+            {
+                string thisRelPath = Path.Combine(relativePath, folder.Name);
+
+                var req = (FtpWebRequest)WebRequest.Create(ftpRoot + thisRelPath.Replace('\\','/'));
+                req.Method = "MKD";
+                req.KeepAlive = true;
+                req.Timeout = 10000;
+                Console.WriteLine($"Requesting folder creation: {thisRelPath}");
+                using (var res = (FtpWebResponse)req.GetResponse())
+                    Console.WriteLine(res.StatusDescription);
+
+                RecursiveFTPFiles(arc, folder, ftpRoot, thisRelPath);
+            }
+            foreach (var file in directory.EnumerateFiles())
+            {
+                string path = Path.Combine(relativePath, file.Name).Replace('\\', '/');
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Write(path);
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write(" -> ");
+                try
+                {
+                    arc.GetFileInformation(path, out long offset, out uint compSize, out uint decompSize, out bool regional);
+
+                    if (offset == 0)
+                        throw new Exception("File path does not return valid data. See if the path is correct");
+
+                    if (InjectedOffsets.Contains(offset))
+                        throw new Exception("File path points to address where data is already handled");
+
+                    if (file.Length > decompSize)
+                        throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
+
+                    byte[] compFile = Compress(file, compSize);
+
+                    var filepath = Path.Combine(relativePath, $"{offset.ToString("x")}_{file.Name}");
+                    var ftpPath = ftpRoot + filepath.Replace('\\', '/');
+
+                    var req = (FtpWebRequest)WebRequest.Create(ftpRoot);
+                    req.Method = "STOR";
+                    req.KeepAlive = true;
+                    req.UseBinary = true;
+                    req.Timeout = 10000;
+                    req.ContentLength = compFile.Length;
+
+                    using (var str = req.GetRequestStream())
+                        str.Write(compFile, 0, compFile.Length);
+                    using (var res = (FtpWebResponse)req.GetResponse())
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"Transfer status {res.StatusDescription}");
                         Console.ForegroundColor = ConsoleColor.White;
                     }
                 }
@@ -335,11 +436,6 @@ namespace ArcInstaller
 
                 return compWithPadStream.ToArray();
             }
-        }
-
-        static void FTP(string[] args)
-        {
-
         }
     }
 }
