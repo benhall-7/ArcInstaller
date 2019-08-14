@@ -399,7 +399,7 @@ namespace ArcInstaller
             byte[] compFile = new byte[0];
             bool canPad = false;
             long padSize = 0;
-            for (int i = 1; i < 23; i++)
+            for (int i = 15; i < 23; i++)
             {
                 using (var memStream = new MemoryStream())
                 using (var zstdStream = new ZstandardStream(memStream, i))
