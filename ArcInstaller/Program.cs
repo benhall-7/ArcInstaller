@@ -283,7 +283,7 @@ namespace ArcInstaller
                         }
                         else
                         {
-                            var newName = $"{offset.ToString("x")}_{file.Name}";
+                            var newName = $"{offset.ToString("x")}";
                             File.WriteAllBytes(Path.Combine(InjectDumpPath, newName), compFile);
                         }
                     }
