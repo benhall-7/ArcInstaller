@@ -447,7 +447,12 @@ namespace ArcInstaller
         static byte[] Compress(FileInfo file, uint compSize, uint decompSize)
         {
             if (compSize == decompSize)
-                return File.ReadAllBytes(file.FullName);
+            {
+                byte[] ret = File.ReadAllBytes(file.FullName);
+                if (ret.Length != decompSize)
+                    throw new Exception($"non-compressed file must match Arc decompressed size ({decompSize})");
+                return ret;
+            }
             Console.Write("Compressing... ");
             byte[] inputFile = File.ReadAllBytes(file.FullName);
             byte[] compFile = new byte[0];
