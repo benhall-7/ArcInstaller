@@ -30,10 +30,11 @@ namespace ArcInstaller
         static string HelpText { get; set; } =
             "~ ArcInstaller ~\n" +
             "Usage: <mode> <options>\n" +
-            "[Modes] = '-h' (print help)\n" +
-            "        = '-i' (Inject)\n" +
-            "        = '-e' (Extract)\n" +
-            "        = '-f' (FTP)\n" +
+            "[Modes] '-h' (print help)\n" +
+            "        '-i' (Inject)\n" +
+            "        '-e' (Extract)\n" +
+            "        '-f' (FTP)\n" +
+            "        '--ftpdir' (FTP make directory)\n" +
             "\n" +
             "Extract <path to Arc>\n" +
             "        <path to name table>\n" +
@@ -50,20 +51,30 @@ namespace ArcInstaller
             "         \"Dump\". instead of injecting, copies compressed\n" +
             "         mods to an output folder specifed by the\n" +
             "         output path variable\n" +
+            "         -Additional: '-1'\n" +
+            "           stores all compressed mods in a single folder\n" +
             "\n" +
             "FTP <path to Arc>\n" +
             "    <path to mods folder>\n" +
             "    <IPv4 addr to switch server>\n" +
             "    <port number in switch server>\n" +
-            "    Optional: <folder path>\n" +
+            "    Optional: '-o' <folder path>\n" +
             "      specifies a folder path in the switch to transfer to\n" +
-            "      default: \"SaltySD/mods/\"\n" +
-            "      NOTE: doesn't begin with '/', and ends with '/'";
+            "      default: SaltySD/mods\n" +
+            "      NOTE: doesn't begin or end with '/'\n" +
+            "    Optional: '-1'\n" +
+            "       stores all compressed mods in a single folder\n" +
+            "\n" +
+            "ftpdir <IPv4 addr to switch server>\n" +
+            "       <port number in switch server>\n" +
+            "       <directory to make>\n" +
+            "         Ex: SaltySD/mods/MyModName";
 
         static HashSet<long> InjectedOffsets { get; set; }
         static bool InjectUndo { get; set; } = false;
         static bool InjectDump { get; set; } = false;
         static string InjectDumpPath { get; set; }
+        static bool ToSingleFolder { get; set; } = false;
 
         static void Main(string[] args)
         {
@@ -85,6 +96,9 @@ namespace ArcInstaller
                     break;
                 case "-h":
                     Console.WriteLine(HelpText);
+                    return;
+                case "--ftpdir":
+                    FTP_MakeDir(args);
                     return;
                 default:
                     Console.WriteLine($"Invalid option '{args[0]}'. See option '-h' for help");
@@ -152,6 +166,12 @@ namespace ArcInstaller
                 {
                     InjectDump = true;
                     InjectDumpPath = injectPath;
+
+                    if (args.Length > 5)
+                    {
+                        if (args[5] == "-1")
+                            ToSingleFolder = true;
+                    }
                 }
                 else
                 {
@@ -254,10 +274,18 @@ namespace ArcInstaller
 
                         InjectedOffsets.Add(offset);
                         var compFile = Compress(file, compSize);
-                        var dumpFolderPath = Path.Combine(InjectDumpPath, relativePath);
-                        var newName = $"{offset.ToString("x")}_{file.Name}";
-                        Directory.CreateDirectory(dumpFolderPath);
-                        File.WriteAllBytes(Path.Combine(dumpFolderPath, newName), compFile);
+                        if (!ToSingleFolder)
+                        {
+                            var dumpFolderPath = Path.Combine(InjectDumpPath, relativePath);
+                            var newName = $"{offset.ToString("x")}_{file.Name}";
+                            Directory.CreateDirectory(dumpFolderPath);
+                            File.WriteAllBytes(Path.Combine(dumpFolderPath, newName), compFile);
+                        }
+                        else
+                        {
+                            var newName = $"{offset.ToString("x")}_{file.Name}";
+                            File.WriteAllBytes(Path.Combine(InjectDumpPath, newName), compFile);
+                        }
                     }
                     else
                     {
@@ -298,8 +326,14 @@ namespace ArcInstaller
             string ip = args[3];
             string port = args[4];
             string folder = "SaltySD/mods";
-            if (args.Length > 5)
-                folder = args[5];
+
+            for (int i = 5; i < args.Length; i++)
+            {
+                if (args[i] == "-o")
+                    folder = args[++i];
+                else if (args[i] == "-1")
+                    ToSingleFolder = true;
+            }
 
             string ftpRoot = $"ftp://{ip}:{port}/{folder}/";
 
@@ -320,13 +354,25 @@ namespace ArcInstaller
             {
                 string thisRelPath = Path.Combine(relativePath, folder.Name);
 
-                var req = (FtpWebRequest)WebRequest.Create(ftpRoot + thisRelPath.Replace('\\','/'));
-                req.Method = "MKD";
-                req.KeepAlive = true;
-                req.Timeout = 10000;
-                Console.WriteLine($"Requesting folder creation: {thisRelPath}");
-                using (var res = (FtpWebResponse)req.GetResponse())
-                    Console.WriteLine(res.StatusDescription);
+                if (!ToSingleFolder)
+                {
+                    var req = (FtpWebRequest)WebRequest.Create(ftpRoot + thisRelPath.Replace('\\', '/'));
+                    req.Method = "MKD";
+                    req.KeepAlive = true;
+                    req.Timeout = 10000;
+
+                    Console.WriteLine($"Requesting make dir: {thisRelPath}");
+
+                    try
+                    {
+                        using (var res = (FtpWebResponse)req.GetResponse())
+                            Console.WriteLine(res.StatusDescription);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"Error: {e.Message}");
+                    }
+                }
 
                 RecursiveFTP(arc, folder, ftpRoot, thisRelPath);
             }
@@ -359,7 +405,11 @@ namespace ArcInstaller
 
                     byte[] compFile = Compress(file, compSize);
 
-                    var filepath = Path.Combine(relativePath, $"{offset.ToString("x")}_{file.Name}");
+                    string filepath;
+                    if (!ToSingleFolder)
+                        filepath = Path.Combine(relativePath, $"{offset.ToString("x")}_{file.Name}");
+                    else
+                        filepath = $"{offset.ToString("x")}";
                     var ftpPath = ftpRoot + filepath.Replace('\\', '/');
 
                     var req = (FtpWebRequest)WebRequest.Create(ftpPath);
@@ -370,6 +420,7 @@ namespace ArcInstaller
                     req.UsePassive = false;
                     req.ContentLength = compFile.Length;
 
+                    Console.Write("Uploading... ");
                     using (var str = req.GetRequestStream())
                         str.Write(compFile, 0, compFile.Length);
                     using (var res = (FtpWebResponse)req.GetResponse())
@@ -395,6 +446,7 @@ namespace ArcInstaller
 
         static byte[] Compress(FileInfo file, uint compSize)
         {
+            Console.Write("Compressing... ");
             byte[] inputFile = File.ReadAllBytes(file.FullName);
             byte[] compFile = new byte[0];
             bool canPad = false;
@@ -492,6 +544,44 @@ namespace ArcInstaller
                 }
             }
             nameNoRegion += ext;
+        }
+
+        static void FTP_MakeDir(string[] args)
+        {
+            if (args.Length < 4)
+            {
+                Console.WriteLine("Insufficient args. See -h for help");
+                return;
+            }
+            string ip = args[1];
+            string port = args[2];
+            string folder = args[3];
+
+            string ftpPath = $"ftp://{ip}:{port}/";
+
+            foreach (var dir_part in folder.Split('/'))
+            {
+                ftpPath += dir_part;
+
+                var req = (FtpWebRequest)WebRequest.Create(ftpPath);
+                req.Method = "MKD";
+                req.KeepAlive = true;
+                req.Timeout = 10000;
+
+                Console.WriteLine($"Requesting make dir: {ftpPath}");
+
+                try
+                {
+                    using (var res = (FtpWebResponse)req.GetResponse())
+                        Console.WriteLine(res.StatusDescription);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"Error: {e.Message}");
+                }
+
+                ftpPath += '/';
+            }
         }
     }
 }
