@@ -273,7 +273,7 @@ namespace ArcInstaller
                             throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
 
                         InjectedOffsets.Add(offset);
-                        var compFile = Compress(file, compSize);
+                        var compFile = Compress(file, compSize, decompSize);
                         if (!ToSingleFolder)
                         {
                             var dumpFolderPath = Path.Combine(InjectDumpPath, relativePath);
@@ -293,7 +293,7 @@ namespace ArcInstaller
                             throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
 
                         writer.BaseStream.Position = offset;
-                        writer.Write(Compress(file, compSize));
+                        writer.Write(Compress(file, compSize, decompSize));
 
                         InjectedOffsets.Add(offset);
 
@@ -403,7 +403,7 @@ namespace ArcInstaller
                     if (InjectedOffsets.Contains(offset))
                         throw new Exception($"Another file already has this offset ({offset.ToString("x")})");
 
-                    byte[] compFile = Compress(file, compSize);
+                    byte[] compFile = Compress(file, compSize, decompSize);
 
                     string filepath;
                     if (!ToSingleFolder)
@@ -444,8 +444,10 @@ namespace ArcInstaller
             }
         }
 
-        static byte[] Compress(FileInfo file, uint compSize)
+        static byte[] Compress(FileInfo file, uint compSize, uint decompSize)
         {
+            if (compSize == decompSize)
+                return File.ReadAllBytes(file.FullName);
             Console.Write("Compressing... ");
             byte[] inputFile = File.ReadAllBytes(file.FullName);
             byte[] compFile = new byte[0];
