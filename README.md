@@ -1,5 +1,4 @@
 # ArcInstaller
-data.arc mod folder injector, written in C#.
 
 To run, execute via 'dotnet' in command line. If dotnet is not present you can download it for free from Microsoft.
 
