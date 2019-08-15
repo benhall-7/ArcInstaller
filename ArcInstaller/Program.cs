@@ -238,7 +238,7 @@ namespace ArcInstaller
             foreach (var file in directory.EnumerateFiles())
             {
                 GetFileRegionInfo(file.Name, out string arcFileName, out int region);
-                string arcPath = Path.Combine(relativePath, arcFileName).Replace('\\', '/');
+                string arcPath = Path.Combine(relativePath, arcFileName).Replace('\\', '/').Replace(';', ':');
                 
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.Write(arcPath);
@@ -383,7 +383,7 @@ namespace ArcInstaller
             foreach (var file in directory.EnumerateFiles())
             {
                 GetFileRegionInfo(file.Name, out string arcFileName, out int region);
-                string arcPath = Path.Combine(relativePath, arcFileName).Replace('\\', '/');
+                string arcPath = Path.Combine(relativePath, arcFileName).Replace('\\', '/').Replace(';', ':');
 
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.Write(arcPath);
