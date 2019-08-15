@@ -286,6 +286,10 @@ namespace ArcInstaller
                             var newName = $"{offset.ToString("x")}";
                             File.WriteAllBytes(Path.Combine(InjectDumpPath, newName), compFile);
                         }
+
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.Write("Done");
+                        Console.ForegroundColor = ConsoleColor.White;
                     }
                     else
                     {
@@ -458,7 +462,7 @@ namespace ArcInstaller
             byte[] compFile = new byte[0];
             bool canPad = false;
             long padSize = 0;
-            for (int i = 15; i < 23; i++)
+            for (int i = 22; i > 0; i--)
             {
                 using (var memStream = new MemoryStream())
                 using (var zstdStream = new ZstandardStream(memStream, i))
