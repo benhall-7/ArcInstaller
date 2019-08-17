@@ -452,10 +452,7 @@ namespace ArcInstaller
         {
             if (compSize == decompSize)
             {
-                byte[] ret = File.ReadAllBytes(file.FullName);
-                if (ret.Length != decompSize)
-                    throw new Exception($"non-compressed file must match Arc decompressed size ({decompSize})");
-                return ret;
+                return File.ReadAllBytes(file.FullName);
             }
             Console.Write("Compressing... ");
             byte[] inputFile = File.ReadAllBytes(file.FullName);
