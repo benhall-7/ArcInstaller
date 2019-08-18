@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ArcInstaller", "ArcInstalle
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ArcCross", "ArcCross\ArcCross\ArcCross.csproj", "{9446D5D8-3C29-41DB-9779-E1FAB1BB63B1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrossInstaller", "CrossInstaller\CrossInstaller.csproj", "{3FF38844-2622-4E94-975B-476B6BB6D0E8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{9446D5D8-3C29-41DB-9779-E1FAB1BB63B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9446D5D8-3C29-41DB-9779-E1FAB1BB63B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9446D5D8-3C29-41DB-9779-E1FAB1BB63B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3FF38844-2622-4E94-975B-476B6BB6D0E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3FF38844-2622-4E94-975B-476B6BB6D0E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3FF38844-2622-4E94-975B-476B6BB6D0E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3FF38844-2622-4E94-975B-476B6BB6D0E8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
