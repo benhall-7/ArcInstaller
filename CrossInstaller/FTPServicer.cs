@@ -5,7 +5,7 @@ using CrossInstaller.System;
 
 namespace CrossInstaller
 {
-    class FTPServicer
+    public class FTPServicer
     {
 
     }
