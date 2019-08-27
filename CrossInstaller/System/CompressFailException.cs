@@ -2,7 +2,7 @@
 
 namespace CrossInstaller.System
 {
-    class CompressFailException : Exception
+    public class CompressFailException : Exception
     {
         public CompressFailException() : base() { }
         public CompressFailException(string message) : base(message) { }
