@@ -270,7 +270,7 @@ namespace ArcInstaller
                     else if (InjectDump)
                     {
                         if (file.Length > decompSize)
-                            throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
+                            throw new Exception($"Uncompressed size ({file.Length}) exceeds its limit: ({decompSize})");
 
                         InjectedOffsets.Add(offset);
                         var compFile = Compress(file, compSize, decompSize);
@@ -294,7 +294,7 @@ namespace ArcInstaller
                     else
                     {
                         if (file.Length > decompSize)
-                            throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
+                            throw new Exception($"Uncompressed size ({file.Length}) exceeds its limit: ({decompSize})");
 
                         writer.BaseStream.Position = offset;
                         writer.Write(Compress(file, compSize, decompSize));
@@ -402,7 +402,7 @@ namespace ArcInstaller
                         throw new Exception("File path points to address where data is already handled");
 
                     if (file.Length > decompSize)
-                        throw new Exception($"Decompiled size ({file.Length}) exceeds its limit: ({decompSize})");
+                        throw new Exception($"Uncompressed size ({file.Length}) exceeds its limit: ({decompSize})");
 
                     if (InjectedOffsets.Contains(offset))
                         throw new Exception($"Another file already has this offset ({offset.ToString("x")})");
